@@ -17,7 +17,7 @@ jobs:
     outputs:
       go: ${{ steps.gate.outputs.go }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: gate
         env:
           EVENT: ${{ github.event_name }}
@@ -39,9 +39,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -58,7 +58,7 @@ jobs:
 
       - name: Upload video + log as artifact (backup, 2일 보관)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: shorts-${{ github.run_number }}
           path: |

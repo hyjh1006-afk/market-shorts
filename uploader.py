@@ -24,7 +24,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",   # 연결된 채널 확인용
 ]
 
-PRIVACY = "private"   # private | unlisted | public
+PRIVACY = "public"   # private | unlisted | public — 미검증 앱은 구글이 강제 비공개로 잠글 수 있음
 TITLE_TEMPLATE = "{date} 시장 브리핑 — 오늘 돈은 어디로? #shorts"
 DESCRIPTION = ("매일 아침 주식·코인·뉴스 데이터를 바탕으로 돈의 흐름을 정리합니다.\n"
                "본 영상은 투자 조언이 아닌 정보 제공 목적입니다.\n"
