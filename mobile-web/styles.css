@@ -1,0 +1,58 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Malgun Gothic", sans-serif;
+  background: #101522; color: #ebeef5;
+  min-height: 100vh; padding-bottom: 40px;
+}
+header {
+  padding: 18px 16px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+h1 { font-size: 20px; }
+h2 { font-size: 16px; margin-bottom: 10px; color: #aab4c3; }
+.badge {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: #1c2334;
+}
+.badge.on { color: #5ec891; }
+.badge.off { color: #e86a6a; }
+main { padding: 0 14px; display: flex; flex-direction: column; gap: 14px; }
+.card {
+  background: #1c2334; border-radius: 16px; padding: 16px;
+}
+button {
+  border: 0; border-radius: 12px; padding: 14px;
+  background: #2a3450; color: #ebeef5; font-size: 15px; font-weight: 600;
+  width: 100%; cursor: pointer;
+}
+button:active { opacity: .7; }
+button.big { padding: 20px; font-size: 18px; }
+button.big small { font-weight: 400; font-size: 12px; color: #aab4c3; }
+button.primary { background: linear-gradient(135deg, #2f855a, #38a169); }
+button:disabled { opacity: .45; }
+.row { display: flex; gap: 8px; margin-top: 10px; }
+.status {
+  margin-top: 12px; padding: 12px; border-radius: 10px;
+  background: #101522; font-size: 14px; line-height: 1.5;
+}
+.status.err { color: #e86a6a; }
+.status.ok { color: #5ec891; }
+.hidden { display: none; }
+input {
+  flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #2a3450;
+  background: #101522; color: #ebeef5; font-size: 14px;
+}
+.hint { font-size: 12px; color: #7a8598; margin-top: 8px; line-height: 1.5; }
+.video-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid #2a3450; gap: 8px;
+}
+.video-item:last-child { border-bottom: 0; }
+.video-name { font-size: 13px; flex: 1; word-break: break-all; }
+.video-item .acts { display: flex; gap: 6px; }
+.video-item button { width: auto; padding: 8px 12px; font-size: 13px; }
+#player {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  background: #000; z-index: 99;
+}
+.spin::before { content: "⏳ "; }

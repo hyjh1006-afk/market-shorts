@@ -1,0 +1,38 @@
+name: daily-shorts
+
+on:
+  schedule:
+    - cron: "30 22 * * *"   # 매일 07:30 KST (= 22:30 UTC)
+  workflow_dispatch: {}      # Actions 탭에서 수동 실행 버튼
+
+jobs:
+  make-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily pipeline (collect → video → YouTube upload)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YT_CLIENT_SECRET_JSON: ${{ secrets.YT_CLIENT_SECRET_JSON }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
+        run: python daily_pipeline.py
+
+      - name: Upload video + log as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shorts-${{ github.run_number }}
+          path: |
+            output/*.mp4
+            logs/*.log
+          retention-days: 7
