@@ -66,8 +66,8 @@ def generate(snapshot: dict, kind: str = "shorts_script") -> str:
 def generate_video_narrations(snapshot: dict) -> dict:
     """영상 장면별 내레이션 + 배경 이미지 프롬프트를 AI가 작성한다.
 
-    반환: {"hook": str, "movers": str, "news": str, "watch": str,
-           "images": {"hook": str, "movers": str, "news": str, "watch": str}}
+    반환: {"hook": str, "movers": str, "coins": str, "news": str, "watch": str,
+           "images": {"hook": str, "movers": str, "coins": str, "news": str, "watch": str}}
     """
     prompt = f"""너는 투자 콘텐츠 작가야. 시청자는 항상 "그래서 돈이 어디로 가고 있는데?"라고 묻고 있다.
 아래 오늘({snapshot['date']}) 시장 데이터로 YouTube Shorts 영상의 장면별 내레이션을 작성해줘.
@@ -75,13 +75,14 @@ def generate_video_narrations(snapshot: dict) -> dict:
 {build_data_block(snapshot)}
 
 아래 JSON 형식으로만 답해. 다른 텍스트, 마크다운, 설명을 붙이지 마:
-{{"hook": "...", "movers": "...", "news": "...", "watch": "...",
-  "images": {{"hook": "...", "movers": "...", "news": "...", "watch": "..."}}}}
+{{"hook": "...", "movers": "...", "coins": "...", "news": "...", "watch": "...",
+  "images": {{"hook": "...", "movers": "...", "coins": "...", "news": "...", "watch": "..."}}}}
 
 각 필드 규칙:
 - hook (약 3초 분량, 1문장): 시선을 잡는 후킹. "오늘 시장, 그냥 오른 게 아니라 돈이 ○○ 쪽으로 몰렸습니다" 느낌.
-- movers (약 7초, 1~2문장): 급등 주식/코인 빠르게 언급만. 숫자는 반드시 반올림해서 ("SK하이닉스 약 11% 상승"). 소수점 금지.
-- news (약 25초, 3~4문장, 가장 길게): 핵심 뉴스 1~2개. 제목만 읽지 말고 왜 중요한지, 어떤 섹터/종목/코인과 연결되는지,
+- movers (약 6초, 1~2문장): 급등 '주식'만 빠르게 언급 (코인은 여기서 말하지 마). 숫자는 반드시 반올림해서 ("SK하이닉스 약 11% 상승"). 소수점 금지.
+- coins (약 5초, 1문장): 코인 시장 요약. 상위 코인 1~2개만 반올림 숫자로.
+- news (약 23초, 3~4문장, 가장 길게): 핵심 뉴스 1~2개. 제목만 읽지 말고 왜 중요한지, 어떤 섹터/종목/코인과 연결되는지,
   돈이 어디로 움직이는 신호인지 설명. 영어 제목은 자연스러운 한국어로 풀어서.
 - watch (약 12초, 2문장): 어떤 섹터/종목/코인을 관찰할지 ("관심 구간", "관찰 필요", "돈의 흐름 확인" 표현)
   + 리스크 한 문장 ("단기 급등주는 변동성이 크니 추격매수보다 뉴스 지속성과 거래량을 같이 봐야 합니다" 느낌).

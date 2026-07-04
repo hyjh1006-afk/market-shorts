@@ -70,11 +70,7 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
 
     if movers:
         quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}" for s in movers)
-        coin_quick = "와 ".join(c["symbol"] for c in coin_movers) if coin_movers else ""
-        narration = f"급등부터 빠르게. {quick}."
-        if coin_quick:
-            narration += f" 코인에서는 {coin_quick}가 강했습니다."
-        # 화면에는 TOP 10까지 보여주고, 내레이션은 상위 3개만 읽는다
+        # 화면에는 주식 TOP 10, 내레이션은 상위 3개만 읽는다
         screen_movers = top_movers(stocks, "ret_1d", 10)
         scenes.append({
             "key": "movers",
@@ -82,7 +78,22 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
             "subtitle": "1일 수익률 TOP 10",
             "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
                       for i, s in enumerate(screen_movers, 1)],
-            "narration": narr.get("movers") or narration,
+            "narration": narr.get("movers") or f"급등부터 빠르게. {quick}.",
+        })
+
+    # 코인 장면: 화면에 코인 TOP 5, 내레이션은 상위 1~2개만
+    if coin_movers:
+        screen_coins = top_movers(coins, "ret_1d", 5)
+        coin_line = ", ".join(
+            f"{KO_COIN.get(c['name'], c['symbol'])} {spoken_pct(c['ret_1d'])}"
+            for c in coin_movers)
+        scenes.append({
+            "key": "coins",
+            "title": "코인 시장",
+            "subtitle": "24시간 상승률 TOP 5",
+            "items": [(f"{i}. {c['name']} ({c['symbol']})", _fmt_pct(c["ret_1d"]), c["ret_1d"])
+                      for i, c in enumerate(screen_coins, 1)],
+            "narration": narr.get("coins") or f"코인 시장에서는 {coin_line}이 돋보였습니다.",
         })
 
     if top_news:
@@ -128,6 +139,16 @@ def _has_hangul(s: str) -> bool:
     return any("가" <= ch <= "힣" for ch in s)
 
 
+# 템플릿 내레이션용 코인 한국어 이름 (AI 모드는 알아서 한국어로 말함)
+KO_COIN = {
+    "Bitcoin": "비트코인", "Ethereum": "이더리움", "XRP": "리플", "BNB": "비엔비",
+    "Solana": "솔라나", "Cardano": "카르다노", "Dogecoin": "도지코인", "TRON": "트론",
+    "Chainlink": "체인링크", "Avalanche": "아발란체", "Stellar": "스텔라루멘",
+    "Hyperliquid": "하이퍼리퀴드", "Monero": "모네로", "Sui": "수이", "Toncoin": "톤코인",
+    "Litecoin": "라이트코인", "Polkadot": "폴카닷", "Shiba Inu": "시바이누",
+}
+
+
 # 장면별 기본 배경 이미지 프롬프트 (AI 내레이션 없이도 항상 이미지 생성)
 _STYLE = ("cinematic, dark navy and teal color palette, professional financial "
           "photography, moody lighting, vertical 9:16 composition, "
@@ -153,6 +174,7 @@ def default_image_prompts(sector: str | None, news_titles: list[str]) -> dict:
     return {
         "hook": f"global financial market money flow concept, glowing light streams over a dark city skyline, {_STYLE}",
         "movers": f"rising stock market rally, upward glowing green candlestick chart on a trading screen, {_STYLE}",
+        "coins": f"golden cryptocurrency coins glowing above a digital trading chart, {_STYLE}",
         "news": f"{news_base}, {_STYLE}",
         "watch": f"trader watching multiple glowing market monitors in a dark room, seen from behind, {_STYLE}",
     }
