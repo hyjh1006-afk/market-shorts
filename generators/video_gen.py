@@ -74,25 +74,36 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
         narration = f"급등부터 빠르게. {quick}."
         if coin_quick:
             narration += f" 코인에서는 {coin_quick}가 강했습니다."
+        # 화면에는 TOP 10까지 보여주고, 내레이션은 상위 3개만 읽는다
+        screen_movers = top_movers(stocks, "ret_1d", 10)
         scenes.append({
             "key": "movers",
             "title": f"{sector or '오늘'} 강세" if sector else "오늘 급등",
-            "subtitle": "1일 수익률 상위",
-            "items": [(s["name"], _fmt_pct(s["ret_1d"]), s["ret_1d"]) for s in movers],
+            "subtitle": "1일 수익률 TOP 10",
+            "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
+                      for i, s in enumerate(screen_movers, 1)],
             "narration": narr.get("movers") or narration,
         })
 
     if top_news:
+        # 템플릿 내레이션은 한국어 제목 뉴스만 읽는다 (영어 제목을 그대로 읽으면 어색)
+        ko_news = [x for x in top_news if _has_hangul(x["title"])]
+        if not ko_news:
+            ko_news = [x for x in key_news(news, 6, sector) if _has_hangul(x["title"])][:2]
         news_lines = [f"{'첫' if i == 1 else '두'} 번째. {x['title']}."
-                      for i, x in enumerate(top_news, 1)]
+                      for i, x in enumerate(ko_news, 1)]
         why = (f" 이 흐름은 {sector} 밸류체인과 직접 연결될 수 있습니다."
                if sector else " 이 뉴스들이 어느 섹터로 돈을 움직이는지가 핵심입니다.")
+        template_news = (("이제 중요한 뉴스입니다. " + " ".join(news_lines) + why)
+                         if news_lines else
+                         (f"오늘 뉴스 흐름의 핵심은 {sector or '주도 섹터'}로 돈이 이어지는지 여부입니다."
+                          " 관련 소식이 이어지는지 지켜봐야 합니다."))
         scenes.append({
             "key": "news",
             "title": "주목할 뉴스",
             "subtitle": "돈의 흐름과 연결되는 소식",
             "items": [],  # 뉴스 원문 제목은 화면에 안 띄운다 (자막+내레이션으로 충분)
-            "narration": narr.get("news") or ("이제 중요한 뉴스입니다. " + " ".join(news_lines) + why),
+            "narration": narr.get("news") or template_news,
         })
 
     if sector and sec_names:
@@ -112,6 +123,40 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
 
 
 # ── 렌더링 헬퍼 ──────────────────────────────────────────────
+
+def _has_hangul(s: str) -> bool:
+    return any("가" <= ch <= "힣" for ch in s)
+
+
+# 장면별 기본 배경 이미지 프롬프트 (AI 내레이션 없이도 항상 이미지 생성)
+_STYLE = ("cinematic, dark navy and teal color palette, professional financial "
+          "photography, moody lighting, vertical 9:16 composition, "
+          "no text, no letters, no numbers, no watermarks, no human faces")
+
+_SECTOR_IMG = {
+    "AI·반도체": "glowing semiconductor chip on a circuit board, data streams",
+    "2차전지": "electric vehicle battery cells glowing with energy",
+    "자동차·모빌리티": "futuristic electric car on a night road",
+    "플랫폼·AI서비스": "abstract digital network nodes and app interfaces",
+    "빅테크·AI": "futuristic artificial intelligence data center, server racks",
+}
+
+
+def default_image_prompts(sector: str | None, news_titles: list[str]) -> dict:
+    joined = " ".join(news_titles).lower()
+    if any(k in joined for k in ["bitcoin", "비트코인", "etf", "crypto", "이더리움", "코인"]):
+        news_base = "golden bitcoin coin above glowing financial charts"
+    elif sector:
+        news_base = _SECTOR_IMG.get(sector, "financial newspaper and market data on a desk")
+    else:
+        news_base = "financial news concept, world map with market data overlays"
+    return {
+        "hook": f"global financial market money flow concept, glowing light streams over a dark city skyline, {_STYLE}",
+        "movers": f"rising stock market rally, upward glowing green candlestick chart on a trading screen, {_STYLE}",
+        "news": f"{news_base}, {_STYLE}",
+        "watch": f"trader watching multiple glowing market monitors in a dark room, seen from behind, {_STYLE}",
+    }
+
 
 def _fit_text(d, text, font, max_w):
     if d.textlength(text, font=font) <= max_w:
@@ -162,39 +207,47 @@ def compose_base(scene: dict, bg_bytes: bytes | None) -> Image.Image:
         img = Image.new("RGB", (W, H), BG)
 
     d = ImageDraw.Draw(img)
-    f_title = _font(FONT_BOLD, 92)
-    f_sub = _font(FONT_REGULAR, 46)
-    f_item = _font(FONT_REGULAR, 44)
-    f_pct = _font(FONT_BOLD, 54)
+    n = len(scene["items"])
+    compact = n > 5   # 항목 많으면(TOP 10) 촘촘한 레이아웃
 
-    title_y = 300 if scene["items"] else 640
+    f_title = _font(FONT_BOLD, 84 if compact else 92)
+    f_sub = _font(FONT_REGULAR, 42 if compact else 46)
+    f_item = _font(FONT_REGULAR, 36 if compact else 44)
+    f_pct = _font(FONT_BOLD, 42 if compact else 54)
+    row_h = 76 if compact else 106
+    row_gap = 10 if compact else 30
+    pad_y = (row_h - (f_item.size + 8)) // 2
+
+    title_y = (150 if compact else 300) if scene["items"] else 640
     tw = d.textlength(scene["title"], font=f_title)
     d.text(((W - tw) / 2, title_y), scene["title"], font=f_title, fill=FG,
            stroke_width=3, stroke_fill=(0, 0, 0))
     sw = d.textlength(scene["subtitle"], font=f_sub)
-    d.text(((W - sw) / 2, title_y + 125), scene["subtitle"], font=f_sub, fill=MUTED,
+    d.text(((W - sw) / 2, title_y + 115), scene["subtitle"], font=f_sub, fill=MUTED,
            stroke_width=2, stroke_fill=(0, 0, 0))
-    d.line([(W / 2 - 120, title_y + 210), (W / 2 + 120, title_y + 210)], fill=ACCENT, width=6)
+    d.line([(W / 2 - 120, title_y + 190), (W / 2 + 120, title_y + 190)], fill=ACCENT, width=6)
 
-    y = title_y + 290
+    y = title_y + (250 if compact else 290)
     if scene["items"]:
         panel = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         pd = ImageDraw.Draw(panel)
         yy = y
-        for name, pct, val in scene["items"]:
-            pd.rounded_rectangle([(80, yy), (W - 80, yy + 106)], radius=20,
+        for _ in scene["items"]:
+            pd.rounded_rectangle([(80, yy), (W - 80, yy + row_h)], radius=16,
                                  fill=(20, 26, 40, 215))
-            yy += 136
+            yy += row_h + row_gap
         img = Image.alpha_composite(img.convert("RGBA"), panel).convert("RGB")
         d = ImageDraw.Draw(img)
         for name, pct, val in scene["items"]:
             if pct:
-                d.text((120, y + 28), _fit_text(d, name, f_item, W - 420), font=f_item, fill=FG)
+                d.text((120, y + pad_y), _fit_text(d, name, f_item, W - 420),
+                       font=f_item, fill=FG)
                 pw = d.textlength(pct, font=f_pct)
-                d.text((W - 120 - pw, y + 22), pct, font=f_pct, fill=_ret_color(val))
+                d.text((W - 120 - pw, y + pad_y - 3), pct, font=f_pct, fill=_ret_color(val))
             else:
-                d.text((120, y + 28), _fit_text(d, name, f_item, W - 240), font=f_item, fill=FG)
-            y += 136
+                d.text((120, y + pad_y), _fit_text(d, name, f_item, W - 240),
+                       font=f_item, fill=FG)
+            y += row_h + row_gap
     return img
 
 
@@ -250,18 +303,29 @@ def generate_video(snapshot: dict, out_dir: Path | None = None,
     """Shorts mp4 생성. AI 키가 있으면 내레이션과 배경 이미지를 AI가 만든다."""
     from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 
-    narrations, images = None, {}
+    from generators import llm_gen
+    from generators.text_gen import dominant_sector as _ds, key_news as _kn
+
+    narrations = None
     if use_ai:
         try:
-            from generators import llm_gen
             if llm_gen.is_available():
                 narrations = llm_gen.generate_video_narrations(snapshot)
-                for k, img_prompt in (narrations.get("images") or {}).items():
-                    img_bytes = llm_gen.generate_image(img_prompt)
-                    if img_bytes:
-                        images[k] = img_bytes
         except Exception:
-            narrations = narrations or None  # 내레이션이라도 성공했으면 사용
+            narrations = None  # AI 실패 시 템플릿 내레이션으로
+
+    # 배경 이미지는 AI 키가 없어도 항상 생성 (Pollinations는 키 불필요).
+    # AI가 장면별 이미지 프롬프트를 줬으면 그걸 우선 쓰고, 없으면 기본 프롬프트.
+    sector, _ = _ds(snapshot["stocks"])
+    titles = [x["title"] for x in _kn(snapshot["news"], 2, sector)]
+    prompts = default_image_prompts(sector, titles)
+    if narrations and narrations.get("images"):
+        prompts.update({k: v for k, v in narrations["images"].items() if v})
+    images = {}
+    for k, img_prompt in prompts.items():
+        img_bytes = llm_gen.generate_image(img_prompt)
+        if img_bytes:
+            images[k] = img_bytes
 
     out_dir = Path(out_dir or OUTPUT_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)
