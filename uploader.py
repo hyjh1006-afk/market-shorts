@@ -19,7 +19,10 @@ from pathlib import Path
 BASE = Path(__file__).parent
 CLIENT_SECRET = BASE / "client_secret.json"
 TOKEN = BASE / "token.json"
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",   # 연결된 채널 확인용
+]
 
 PRIVACY = "private"   # private | unlisted | public
 TITLE_TEMPLATE = "{date} 시장 브리핑 — 오늘 돈은 어디로? #shorts"
