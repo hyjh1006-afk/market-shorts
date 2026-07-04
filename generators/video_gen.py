@@ -81,16 +81,16 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
             "narration": narr.get("movers") or f"급등부터 빠르게. {quick}.",
         })
 
-    # 코인 장면: 화면에 코인 TOP 5, 내레이션은 상위 1~2개만
+    # 코인 장면: 화면에 코인 TOP 10, 내레이션은 상위 1~2개만
     if coin_movers:
-        screen_coins = top_movers(coins, "ret_1d", 5)
+        screen_coins = top_movers(coins, "ret_1d", 10)
         coin_line = ", ".join(
             f"{KO_COIN.get(c['name'], c['symbol'])} {spoken_pct(c['ret_1d'])}"
             for c in coin_movers)
         scenes.append({
             "key": "coins",
             "title": "코인 시장",
-            "subtitle": "24시간 상승률 TOP 5",
+            "subtitle": "24시간 상승률 TOP 10",
             "items": [(f"{i}. {c['name']} ({c['symbol']})", _fmt_pct(c["ret_1d"]), c["ret_1d"])
                       for i, c in enumerate(screen_coins, 1)],
             "narration": narr.get("coins") or f"코인 시장에서는 {coin_line}이 돋보였습니다.",
