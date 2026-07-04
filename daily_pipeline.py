@@ -18,6 +18,28 @@ LOG_DIR = BASE / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 
+def cleanup_outputs(keep_videos: int = 2, log_days: int = 14):
+    """업로드가 끝난 뒤 저장 공간 정리: 최신 영상 2개만 남기고 삭제, 오래된 로그 삭제."""
+    out_dir = BASE / "output"
+    if out_dir.exists():
+        vids = sorted(out_dir.glob("shorts_*.mp4"),
+                      key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in vids[keep_videos:]:
+            try:
+                old.unlink()
+                log(f"  정리: {old.name} 삭제")
+            except OSError:
+                pass
+    import time
+    cutoff = time.time() - log_days * 86400
+    for lg in LOG_DIR.glob("daily_*.log"):
+        if lg.stat().st_mtime < cutoff:
+            try:
+                lg.unlink()
+            except OSError:
+                pass
+
+
 def _materialize_youtube_secrets():
     """GitHub Actions에서는 시크릿(환경변수)으로 유튜브 인증 파일을 만든다."""
     for env_name, fname in [("YT_CLIENT_SECRET_JSON", "client_secret.json"),
@@ -76,6 +98,9 @@ def main() -> int:
             log(f"  업로드 완료: https://youtube.com/shorts/{vid}")
     except Exception as e:
         log(f"  업로드 실패: {e}")
+
+    log("정리: 오래된 영상/로그 삭제")
+    cleanup_outputs()
 
     log("=== 완료 ===")
     return 0

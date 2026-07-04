@@ -1,19 +1,41 @@
 name: daily-shorts
 
-# ── 실행 시간 바꾸는 법 ──────────────────────────────────────
-# 아래 cron 줄만 고치면 된다 (GitHub 웹에서 이 파일 열고 연필 아이콘 → 수정 → Commit).
-# UTC 기준이라 한국 시간에서 9시간을 빼야 한다:
-#   아침 6:00 → "0 21 * * *"   /  6:30 → "30 21 * * *"
-#   아침 7:00 → "0 22 * * *"   /  7:30 → "30 22 * * *"
-#   아침 8:00 → "0 23 * * *"   /  8:30 → "30 23 * * *"
-#   아침 9:00 → "0 0 * * *"
+# ── 업로드 시간 설정 ─────────────────────────────────────────
+# schedule.json의 "times" 목록(한국시간, 30분 단위, 최대 6개)에 적힌
+# 시각마다 영상을 만들어 유튜브에 올린다.
+# 예: {"times": ["07:30", "12:00", "19:30"]}
+# 폰 앱(설정 섹션)에서도 바꿀 수 있고, GitHub에서 schedule.json을 직접 고쳐도 된다.
+
 on:
   schedule:
-    - cron: "30 22 * * *"   # 매일 07:30 KST (= 22:30 UTC)
-  workflow_dispatch: {}      # Actions 탭에서 수동 실행 버튼
+    - cron: "*/30 * * * *"   # 30분마다 깨어나 시간표 확인 (공개 저장소라 무료)
+  workflow_dispatch: {}      # Actions 탭에서 수동 실행 버튼 (시간표 무시하고 즉시 실행)
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.gate.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, datetime
+          now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
+          slot = f"{now.hour:02d}:{'30' if now.minute >= 30 else '00'}"
+          times = json.load(open("schedule.json")).get("times", [])[:6]
+          go = os.environ.get("EVENT") == "workflow_dispatch" or slot in times
+          print(f"KST slot={slot}, times={times}, go={go}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"go={'true' if go else 'false'}\n")
+          EOF
+
   make-and-upload:
+    needs: check
+    if: needs.check.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -34,7 +56,7 @@ jobs:
           YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
         run: python daily_pipeline.py
 
-      - name: Upload video + log as artifact
+      - name: Upload video + log as artifact (backup, 2일 보관)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -42,4 +64,4 @@ jobs:
           path: |
             output/*.mp4
             logs/*.log
-          retention-days: 7
+          retention-days: 2

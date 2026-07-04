@@ -119,6 +119,8 @@ with tab_shorts:
                     video_path = generate_video(snapshot)
                     db.save_generated("shorts_video", video_path, sel_date)
                     st.session_state["video_path"] = video_path
+                    from daily_pipeline import cleanup_outputs
+                    cleanup_outputs()   # 최신 2개만 남기고 자동 정리
                 except Exception as e:
                     st.error(f"영상 생성 실패: {e}")
 
