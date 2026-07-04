@@ -11,11 +11,14 @@
 | 방법 | 실행 | 용도 |
 |---|---|---|
 | PC 웹앱 | 바탕화면 "시장관찰 앱" 또는 `앱실행.bat` | PC에서 데이터 보고 영상 만들기 |
-| 모바일 리모컨 | `모바일리모컨.bat` → 폰에서 표시된 주소 접속 | 폰으로 영상 생성·재생·다운로드·유튜브 업로드 |
-| 자동 (매일 아침) | 작업 스케줄러 "MarketShortsDaily" (07:30) | 수집→영상→유튜브 업로드 무인 실행 |
+| 폰 (클라우드) | Streamlit Cloud 배포 후 폰 브라우저에서 접속 | 어디서든 버튼 한 번으로 영상 생성·저장 |
+| 자동 (매일 아침) | GitHub Actions (07:30 KST) | 수집→영상→유튜브 업로드 무인 실행 (PC 불필요) |
 
-모바일 리모컨: 폰과 PC가 **같은 Wi-Fi**에 있어야 하고, PC가 켜져 있어야 한다.
-자동 실행도 PC가 켜져 있어야 한다 (로그: `logs/daily_*.log`).
+클라우드 배포: 이 폴더를 GitHub `market-shorts` 저장소에 push → share.streamlit.io에서
+`streamlit_app.py`로 배포 → Secrets에 `GEMINI_API_KEY` 등록. (Tistory_cloud와 같은 방식)
+GitHub Actions 자동 실행에도 저장소 Secrets에 `GEMINI_API_KEY` 필요 (+ 유튜브는
+`YT_CLIENT_SECRET_JSON`, `YT_TOKEN_JSON`).
+로컬 작업 스케줄러 "MarketShortsDaily"(07:30)도 있음 — Actions가 가동되면 둘 중 하나는 끌 것.
 
 ## 유튜브 자동 업로드 설정 (최초 1회)
 
