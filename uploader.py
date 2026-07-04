@@ -13,7 +13,6 @@
       그 경우 PRIVACY를 "private"로 두고 유튜브 앱/스튜디오에서 공개 전환하거나,
       구글에 API 감사(무료)를 신청하면 공개 업로드가 가능해진다.
 """
-from datetime import date
 from pathlib import Path
 
 BASE = Path(__file__).parent
@@ -24,12 +23,31 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",   # 연결된 채널 확인용
 ]
 
-PRIVACY = "public"   # private | unlisted | public — 미검증 앱은 구글이 강제 비공개로 잠글 수 있음
-TITLE_TEMPLATE = "{date} 시장 브리핑 — 오늘 돈은 어디로? #shorts"
-DESCRIPTION = ("매일 아침 주식·코인·뉴스 데이터를 바탕으로 돈의 흐름을 정리합니다.\n"
+PRIVACY = "public"   # private | unlisted | public
+DESCRIPTION = ("매일 주식·코인·뉴스 데이터를 바탕으로 돈의 흐름을 정리합니다.\n"
                "본 영상은 투자 조언이 아닌 정보 제공 목적입니다.\n"
                "#주식 #코인 #시장브리핑")
 TAGS = ["주식", "코인", "시장브리핑", "shorts", "투자뉴스"]
+
+# 시간표 슬롯 → 제목에 들어갈 시간대 이름 (schedule.json의 기본 6개 기준)
+SLOT_LABELS = {
+    "07:00": "아침", "08:30": "오전", "12:30": "점심",
+    "18:00": "저녁", "21:00": "오후", "22:30": "밤",
+}
+
+
+def _default_title() -> str:
+    """예: '26년 7월 4일 아침 시장 브리핑' (한국시간 기준)"""
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc) + timedelta(hours=9)
+    slot = f"{now.hour:02d}:{'30' if now.minute >= 30 else '00'}"
+    label = SLOT_LABELS.get(slot)
+    if label is None:  # 시간표에 없는 시각(수동 실행 등)은 시간대로 추정
+        h = now.hour
+        label = ("아침" if 5 <= h < 8 else "오전" if 8 <= h < 11 else
+                 "점심" if 11 <= h < 14 else "오후" if 14 <= h < 18 else
+                 "저녁" if 18 <= h < 21 else "밤")
+    return f"{now.year % 100}년 {now.month}월 {now.day}일 {label} 시장 브리핑"
 
 
 def is_configured() -> bool:
@@ -66,7 +84,7 @@ def upload_video(path: str, title: str | None = None,
 
     body = {
         "snippet": {
-            "title": title or TITLE_TEMPLATE.format(date=date.today().strftime("%m/%d")),
+            "title": title or _default_title(),
             "description": description or DESCRIPTION,
             "tags": TAGS,
             "categoryId": "25",  # News & Politics
