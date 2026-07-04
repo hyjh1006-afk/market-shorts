@@ -5,4 +5,5 @@ output/
 logs/
 client_secret.json
 token.json
+github_secrets_붙여넣기.txt
 .streamlit/

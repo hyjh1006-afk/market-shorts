@@ -82,6 +82,34 @@ def upload_video(path: str, title: str | None = None,
     return response["id"]
 
 
+def _check_channel(creds) -> str:
+    """토큰이 어느 채널에 연결됐는지 확인한다."""
+    from googleapiclient.discovery import build
+    yt = build("youtube", "v3", credentials=creds)
+    resp = yt.channels().list(part="snippet", mine=True).execute()
+    items = resp.get("items", [])
+    if not items:
+        return "(채널 확인 실패)"
+    sn = items[0]["snippet"]
+    handle = sn.get("customUrl", "")
+    return f"{sn['title']} ({handle})"
+
+
+def _write_github_secrets_helper():
+    """GitHub Actions 시크릿에 붙여넣을 내용을 파일로 저장한다 (로컬 전용, git 제외)."""
+    out = BASE / "github_secrets_붙여넣기.txt"
+    text = (
+        "GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret\n"
+        "아래 두 개를 각각 등록하세요 (이 파일은 절대 공유 금지!)\n\n"
+        "=== 이름: YT_CLIENT_SECRET_JSON / 값: ===\n"
+        + CLIENT_SECRET.read_text(encoding="utf-8").strip() + "\n\n"
+        "=== 이름: YT_TOKEN_JSON / 값: ===\n"
+        + TOKEN.read_text(encoding="utf-8").strip() + "\n"
+    )
+    out.write_text(text, encoding="utf-8")
+    return out
+
+
 if __name__ == "__main__":
     import sys
     if not is_configured():
@@ -89,8 +117,13 @@ if __name__ == "__main__":
         sys.exit(1)
     # 인자 없으면 인증만 수행 (token.json 생성)
     if len(sys.argv) < 2:
-        _get_credentials()
-        print("인증 완료! token.json 생성됨. 이제 자동 업로드가 가능합니다.")
+        print("브라우저가 열립니다. 구글 로그인 후 '계정 선택' 화면에서")
+        print("반드시 업로드할 유튜브 채널(rich_youtube_kr)을 선택하세요!")
+        creds = _get_credentials()
+        print(f"\n인증 완료! 연결된 채널: {_check_channel(creds)}")
+        helper = _write_github_secrets_helper()
+        print(f"\nGitHub 자동 업로드용 시크릿 내용을 저장했습니다:\n  {helper}")
+        print("이 파일을 열어 안내대로 GitHub에 등록하면 매일 아침 자동 업로드가 켜집니다.")
     else:
         vid = upload_video(sys.argv[1])
         print(f"업로드 완료: https://youtube.com/shorts/{vid}")
