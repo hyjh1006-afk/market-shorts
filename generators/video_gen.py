@@ -255,11 +255,11 @@ def add_subtitle(base: Image.Image, sentence: str) -> Image.Image:
     """하단에 자막 밴드 + 문장을 얹는다. 긴 문장은 글자를 줄여 4줄까지."""
     img = base.convert("RGBA")
     d = ImageDraw.Draw(img)
-    f_sub = _font(FONT_BOLD, 52)
-    lines = _wrap_text(d, sentence, f_sub, W - 200)
-    if len(lines) > 3:  # 3줄 초과면 폰트를 줄여 다시 감싼다 (최대 4줄)
-        f_sub = _font(FONT_BOLD, 44)
-        lines = _wrap_text(d, sentence, f_sub, W - 180)[:4]
+    f_sub = _font(FONT_BOLD, 60)   # 40~50대 시청자 가독성 위해 크게
+    lines = _wrap_text(d, sentence, f_sub, W - 160)
+    if len(lines) > 3:  # 3줄 초과면 폰트를 살짝 줄여 다시 감싼다 (최대 4줄)
+        f_sub = _font(FONT_BOLD, 52)
+        lines = _wrap_text(d, sentence, f_sub, W - 150)[:4]
 
     line_h = round(f_sub.size * 1.42)
     band_h = line_h * len(lines) + 60
