@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS stock_snapshot (
     volume      INTEGER,
     vol_ratio   REAL,       -- 당일 거래량 / 20일 평균
     currency    TEXT,
+    last_date   TEXT,       -- 등락률 기준: 최근 거래일
+    prev_date   TEXT,       -- 등락률 기준: 직전 거래일
     PRIMARY KEY (snap_date, ticker)
 );
 CREATE TABLE IF NOT EXISTS coin_snapshot (
@@ -56,11 +58,16 @@ def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
-    # 마이그레이션: 기존 DB에 score 컬럼이 없으면 추가
-    try:
-        conn.execute("ALTER TABLE news ADD COLUMN score REAL DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
+    # 마이그레이션: 기존 DB에 없는 컬럼 추가
+    for stmt in (
+        "ALTER TABLE news ADD COLUMN score REAL DEFAULT 0",
+        "ALTER TABLE stock_snapshot ADD COLUMN last_date TEXT",
+        "ALTER TABLE stock_snapshot ADD COLUMN prev_date TEXT",
+    ):
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError:
+            pass
     return conn
 
 
@@ -75,9 +82,9 @@ def save_stocks(rows: list[dict], snap_date: str | None = None):
     with get_conn() as conn:
         conn.executemany(
             """INSERT OR REPLACE INTO stock_snapshot
-               (snap_date, ticker, name, price, ret_1d, ret_7d, ret_30d, volume, vol_ratio, currency)
-               VALUES (:snap_date, :ticker, :name, :price, :ret_1d, :ret_7d, :ret_30d, :volume, :vol_ratio, :currency)""",
-            [{**r, "snap_date": snap_date} for r in rows],
+               (snap_date, ticker, name, price, ret_1d, ret_7d, ret_30d, volume, vol_ratio, currency, last_date, prev_date)
+               VALUES (:snap_date, :ticker, :name, :price, :ret_1d, :ret_7d, :ret_30d, :volume, :vol_ratio, :currency, :last_date, :prev_date)""",
+            [{"last_date": None, "prev_date": None, **r, "snap_date": snap_date} for r in rows],
         )
 
 
