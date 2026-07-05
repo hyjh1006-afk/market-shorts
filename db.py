@@ -2,7 +2,7 @@
 """SQLite 저장소: 일자별 시장 스냅샷과 뉴스를 보관한다."""
 import json
 import sqlite3
-from datetime import date
+from datetime import datetime, timedelta, timezone
 
 from config import DB_PATH
 
@@ -65,7 +65,9 @@ def get_conn():
 
 
 def today() -> str:
-    return date.today().isoformat()
+    """한국시간 기준 오늘. GitHub Actions(UTC 서버)에서 돌아도 날짜가 밀리지 않는다.
+    (영상 첫 화면 날짜가 하루 전으로 찍히던 버그의 원인 — 2026-07-05 수정)"""
+    return (datetime.now(timezone.utc) + timedelta(hours=9)).date().isoformat()
 
 
 def save_stocks(rows: list[dict], snap_date: str | None = None):
