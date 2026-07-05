@@ -36,6 +36,15 @@ def spoken_pct(v) -> str:
     return f"약 {n}% {direction}"
 
 
+# 낭독 시 영어로 읽히면 안 되는 종목명 → 한국어 발음 (화면 표기는 원래 name 유지)
+_SPOKEN_NAME = {"AMD": "에이엠디", "SK하이닉스": "에스케이하이닉스", "LG에너지솔루션": "엘지에너지솔루션",
+                "POSCO홀딩스": "포스코홀딩스", "NAVER": "네이버"}
+
+
+def spoken_name(name: str) -> str:
+    return _SPOKEN_NAME.get(name, name)
+
+
 def dominant_sector(stocks: list[dict]) -> tuple[str | None, list[str]]:
     """상승 상위 종목들의 섹터를 집계해 오늘 돈이 몰린 섹터를 추정한다."""
     movers = top_movers(stocks, "ret_1d", 5)
@@ -133,9 +142,9 @@ def generate_shorts_script(snapshot: dict) -> str:
     parts.append("(3~13초 · 국내/미국 급등 요약 — 빠르게 치고 지나가기)")
     kr = [s for s in stocks if s.get("currency") == "KRW"]
     us = [s for s in stocks if s.get("currency") == "USD"]
-    kr_quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+    kr_quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s['ret_1d'])}"
                          for s in top_movers(kr, "ret_1d", 3))
-    us_quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+    us_quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s['ret_1d'])}"
                          for s in top_movers(us, "ret_1d", 3))
     coin_quick = "와 ".join(c["symbol"] for c in coin_movers)
     parts.append(f"국내 증시에서는 {kr_quick}.")

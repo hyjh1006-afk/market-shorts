@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import FONT_BOLD, FONT_REGULAR, OUTPUT_DIR, TTS_VOICE, TTS_RATE
 from generators.text_gen import (top_movers, dominant_sector, key_news,
-                                 spoken_pct, _fmt_pct)
+                                 spoken_pct, spoken_name, _fmt_pct)
 
 W, H = 1080, 1920
 
@@ -73,7 +73,7 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
 
     kr_top = top_movers(kr_stocks, "ret_1d", 10)
     if kr_top:
-        quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+        quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s['ret_1d'])}"
                           for s in top_movers(kr_stocks, "ret_1d", 3))
         scenes.append({
             "key": "movers",  # 국내 (키 유지 — AI 내레이션 movers 필드 = 국내)
@@ -86,7 +86,7 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
 
     us_top = top_movers(us_stocks, "ret_1d", 10)
     if us_top:
-        us_quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+        us_quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s['ret_1d'])}"
                              for s in top_movers(us_stocks, "ret_1d", 3))
         scenes.append({
             "key": "us_movers",
