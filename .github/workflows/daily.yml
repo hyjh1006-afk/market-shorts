@@ -21,14 +21,52 @@ jobs:
       - id: gate
         env:
           EVENT: ${{ github.event_name }}
+          YT_TOKEN_JSON: ${{ secrets.YT_TOKEN_JSON }}
         run: |
           python3 - <<'EOF'
-          import json, os, datetime
-          now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
-          slot = f"{now.hour:02d}:{'30' if now.minute >= 30 else '00'}"
-          times = json.load(open("schedule.json")).get("times", [])[:6]
-          go = os.environ.get("EVENT") == "workflow_dispatch" or slot in times
-          print(f"KST slot={slot}, times={times}, go={go}")
+          import json, os, datetime, urllib.request, urllib.parse
+
+          KST = datetime.timezone(datetime.timedelta(hours=9))
+          now = datetime.datetime.now(KST)
+          slot_now = f"{now.hour:02d}:{now.minute:02d}"
+          times = sorted(json.load(open("schedule.json")).get("times", [])[:6])
+          # 오늘 지금까지 지나간(예정) 업로드 시각 수
+          due = sum(1 for t in times if t <= slot_now)
+
+          def today_uploads():
+              """유튜브 API로 '오늘(KST) 실제 업로드된 영상 수'를 센다 (중복 방지)."""
+              d = json.loads(os.environ.get("YT_TOKEN_JSON", "") or "{}")
+              body = urllib.parse.urlencode({
+                  "client_id": d["client_id"], "client_secret": d["client_secret"],
+                  "refresh_token": d["refresh_token"], "grant_type": "refresh_token",
+              }).encode()
+              at = json.loads(urllib.request.urlopen(
+                  "https://oauth2.googleapis.com/token", body).read())["access_token"]
+              def api(url):
+                  req = urllib.request.Request(url, headers={"Authorization": f"Bearer {at}"})
+                  return json.loads(urllib.request.urlopen(req).read())
+              ch = api("https://www.googleapis.com/youtube/v3/channels?part=contentDetails&mine=true")
+              up = ch["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+              pl = api(f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId={up}&maxResults=25")
+              today = now.date().isoformat()
+              cnt = 0
+              for it in pl.get("items", []):
+                  pub = it["snippet"]["publishedAt"].replace("Z", "+00:00")
+                  if datetime.datetime.fromisoformat(pub).astimezone(KST).date().isoformat() == today:
+                      cnt += 1
+              return cnt
+
+          if os.environ.get("EVENT") == "workflow_dispatch":
+              go, posted = True, -1
+          else:
+              try:
+                  posted = today_uploads()
+              except Exception as e:
+                  print("업로드 수 확인 실패:", e)
+                  posted = 0
+              # 지나간 슬롯 수 > 오늘 업로드 수일 때만 (정시 놓쳐도 다음 30분에 따라잡음)
+              go = due > posted
+          print(f"KST {slot_now} · times={times} · due={due} · posted={posted} · go={go}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               f.write(f"go={'true' if go else 'false'}\n")
           EOF
