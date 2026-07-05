@@ -21,6 +21,16 @@ from PIL import Image, ImageDraw, ImageFont
 from config import FONT_BOLD, FONT_REGULAR, OUTPUT_DIR, TTS_VOICE, TTS_RATE
 from generators.text_gen import (top_movers, dominant_sector, key_news,
                                  spoken_pct, spoken_name, _fmt_pct)
+from generators.market_hours import basis_caption, coin_caption
+
+
+def _basis(market: str, rows: list[dict]) -> str:
+    """장면 하단 등락률 기준 문구. rows에서 거래일 날짜를 읽어 생성."""
+    if not rows:
+        return ""
+    prev = rows[0].get("prev_date", "")
+    last = rows[0].get("last_date", "")
+    return basis_caption(market, prev, last)
 
 W, H = 1080, 1920
 
@@ -81,6 +91,7 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
             "subtitle": "국내 주식 1일 등락률 TOP 10",
             "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
                       for i, s in enumerate(kr_top, 1)],
+            "caption": _basis("KR", kr_top),
             "narration": narr.get("movers") or f"국내 증시부터 빠르게. {quick}.",
         })
 
@@ -94,6 +105,7 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
             "subtitle": "미국 주식 1일 등락률 TOP 10",
             "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
                       for i, s in enumerate(us_top, 1)],
+            "caption": _basis("US", us_top),
             "narration": narr.get("us_movers") or f"미국 증시에서는 {us_quick}.",
         })
 
@@ -109,6 +121,7 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
             "subtitle": "24시간 상승률 TOP 10",
             "items": [(f"{i}. {c['name']} ({c['symbol']})", _fmt_pct(c["ret_1d"]), c["ret_1d"])
                       for i, c in enumerate(screen_coins, 1)],
+            "caption": coin_caption(),
             "narration": narr.get("coins") or f"코인 시장에서는 {coin_line}이 돋보였습니다.",
         })
 
@@ -264,9 +277,20 @@ def compose_base(scene: dict, bg_bytes: bytes | None) -> Image.Image:
     sw = d.textlength(scene["subtitle"], font=f_sub)
     d.text(((W - sw) / 2, title_y + 115), scene["subtitle"], font=f_sub, fill=MUTED,
            stroke_width=2, stroke_fill=(0, 0, 0))
-    d.line([(W / 2 - 120, title_y + 190), (W / 2 + 120, title_y + 190)], fill=ACCENT, width=6)
 
-    y = title_y + (250 if compact else 290)
+    # 등락률 기준 문구 — 제목 영역(상단)에 배치해 자막 밴드·항목과 겹치지 않게
+    caption = scene.get("caption")
+    cap_h = 0
+    if caption and scene["items"]:
+        f_cap = _font(FONT_REGULAR, 32)
+        cw = d.textlength(caption, font=f_cap)
+        d.text(((W - cw) / 2, title_y + 168), caption, font=f_cap, fill=MUTED,
+               stroke_width=2, stroke_fill=(0, 0, 0))
+        cap_h = 46
+    d.line([(W / 2 - 120, title_y + 190 + cap_h), (W / 2 + 120, title_y + 190 + cap_h)],
+           fill=ACCENT, width=6)
+
+    y = title_y + (250 if compact else 290) + cap_h
     if scene["items"]:
         panel = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         pd = ImageDraw.Draw(panel)

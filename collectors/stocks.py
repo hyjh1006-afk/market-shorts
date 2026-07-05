@@ -21,8 +21,10 @@ def collect_stocks(watchlist: dict[str, str] | None = None) -> list[dict]:
     watchlist = watchlist or STOCK_WATCHLIST
     tickers = list(watchlist.keys())
     # 45 거래일이면 30일 수익률 + 20일 평균거래량 계산에 충분
+    # prepost=False: 프리마켓/애프터마켓(시간외) 제외, 정규장 데이터만 사용
     data = yf.download(tickers, period="3mo", interval="1d",
-                       group_by="ticker", auto_adjust=True, progress=False)
+                       group_by="ticker", auto_adjust=True, progress=False,
+                       prepost=False)
 
     rows = []
     for ticker in tickers:
@@ -36,6 +38,9 @@ def collect_stocks(watchlist: dict[str, str] | None = None) -> list[dict]:
         vol = df["Volume"]
         cur = float(close.iloc[-1])
         vol_avg20 = float(vol.iloc[-21:-1].mean())
+        # 등락률 기준이 되는 두 거래일 날짜 (마지막 봉 = 장중이면 현재가, 마감이면 종가)
+        last_date = df.index[-1].strftime("%Y-%m-%d")
+        prev_date = df.index[-2].strftime("%Y-%m-%d")
         rows.append({
             "ticker": ticker,
             "name": watchlist[ticker],
@@ -46,6 +51,8 @@ def collect_stocks(watchlist: dict[str, str] | None = None) -> list[dict]:
             "volume": int(vol.iloc[-1]),
             "vol_ratio": round(float(vol.iloc[-1]) / vol_avg20, 2) if vol_avg20 else None,
             "currency": "KRW" if ticker.endswith((".KS", ".KQ")) else "USD",
+            "last_date": last_date,
+            "prev_date": prev_date,
         })
     return rows
 
