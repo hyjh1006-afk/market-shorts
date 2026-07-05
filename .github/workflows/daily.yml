@@ -8,7 +8,9 @@ name: daily-shorts
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # 30분마다 깨어나 시간표 확인 (공개 저장소라 무료)
+    # 15분 간격 + 혼잡 시각(:00/:30) 회피 — GitHub 스케줄러는 정각·30분 예약을
+    # 자주 누락/지연시키므로 비켜난 분에 깨어나 놓친 슬롯을 따라잡는다
+    - cron: "4,19,34,49 * * * *"
   workflow_dispatch: {}      # Actions 탭에서 수동 실행 버튼 (시간표 무시하고 즉시 실행)
 
 jobs:
@@ -62,9 +64,10 @@ jobs:
               try:
                   posted = today_uploads()
               except Exception as e:
-                  print("업로드 수 확인 실패:", e)
-                  posted = 0
-              # 지나간 슬롯 수 > 오늘 업로드 수일 때만 (정시 놓쳐도 다음 30분에 따라잡음)
+                  # 확인 실패 시엔 건너뛴다 (중복 업로드 방지 — 다음 체크에서 재시도됨)
+                  print("업로드 수 확인 실패 → 이번 체크는 건너뜀:", e)
+                  posted = due
+              # 지나간 슬롯 수 > 오늘 업로드 수일 때만 (정시 놓쳐도 다음 체크에서 따라잡음)
               go = due > posted
           print(f"KST {slot_now} · times={times} · due={due} · posted={posted} · go={go}")
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
