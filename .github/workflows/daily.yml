@@ -51,10 +51,13 @@ jobs:
               up = ch["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
               pl = api(f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId={up}&maxResults=25")
               today = now.date().isoformat()
+              first_slot = times[0] if times else "00:00"
               cnt = 0
               for it in pl.get("items", []):
                   pub = it["snippet"]["publishedAt"].replace("Z", "+00:00")
-                  if datetime.datetime.fromisoformat(pub).astimezone(KST).date().isoformat() == today:
+                  p = datetime.datetime.fromisoformat(pub).astimezone(KST)
+                  # 오늘 첫 슬롯 이전에 올라간 영상은 전날 막차 따라잡기분 → 오늘 집계에서 제외
+                  if p.date().isoformat() == today and f"{p.hour:02d}:{p.minute:02d}" >= first_slot:
                       cnt += 1
               return cnt
 
