@@ -47,6 +47,8 @@ def _default_title() -> str:
         label = ("아침" if 5 <= h < 8 else "오전" if 8 <= h < 11 else
                  "점심" if 11 <= h < 14 else "오후" if 14 <= h < 18 else
                  "저녁" if 18 <= h < 21 else "밤")
+    if now.weekday() >= 5:  # 토·일: 주간 결산 모드
+        return f"{now.year % 100:02d}/{now.month:02d}/{now.day:02d} {label} 주간 결산 - 돈의 흐름 #shorts"
     return f"{now.year % 100:02d}/{now.month:02d}/{now.day:02d} {label} 시장 브리핑 - 돈의 흐름 #shorts"
 
 

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS stock_snapshot (
     currency    TEXT,
     last_date   TEXT,       -- 등락률 기준: 최근 거래일
     prev_date   TEXT,       -- 등락률 기준: 직전 거래일
+    week_date   TEXT,       -- 주간 수익률 기준 시작 거래일
     PRIMARY KEY (snap_date, ticker)
 );
 CREATE TABLE IF NOT EXISTS coin_snapshot (
@@ -63,6 +64,7 @@ def get_conn():
         "ALTER TABLE news ADD COLUMN score REAL DEFAULT 0",
         "ALTER TABLE stock_snapshot ADD COLUMN last_date TEXT",
         "ALTER TABLE stock_snapshot ADD COLUMN prev_date TEXT",
+        "ALTER TABLE stock_snapshot ADD COLUMN week_date TEXT",
     ):
         try:
             conn.execute(stmt)
@@ -82,9 +84,9 @@ def save_stocks(rows: list[dict], snap_date: str | None = None):
     with get_conn() as conn:
         conn.executemany(
             """INSERT OR REPLACE INTO stock_snapshot
-               (snap_date, ticker, name, price, ret_1d, ret_7d, ret_30d, volume, vol_ratio, currency, last_date, prev_date)
-               VALUES (:snap_date, :ticker, :name, :price, :ret_1d, :ret_7d, :ret_30d, :volume, :vol_ratio, :currency, :last_date, :prev_date)""",
-            [{"last_date": None, "prev_date": None, **r, "snap_date": snap_date} for r in rows],
+               (snap_date, ticker, name, price, ret_1d, ret_7d, ret_30d, volume, vol_ratio, currency, last_date, prev_date, week_date)
+               VALUES (:snap_date, :ticker, :name, :price, :ret_1d, :ret_7d, :ret_30d, :volume, :vol_ratio, :currency, :last_date, :prev_date, :week_date)""",
+            [{"last_date": None, "prev_date": None, "week_date": None, **r, "snap_date": snap_date} for r in rows],
         )
 
 

@@ -21,15 +21,21 @@ from PIL import Image, ImageDraw, ImageFont
 from config import FONT_BOLD, FONT_REGULAR, OUTPUT_DIR, TTS_VOICE, TTS_RATE
 from generators.text_gen import (top_movers, dominant_sector, key_news,
                                  spoken_pct, spoken_name, _fmt_pct)
-from generators.market_hours import basis_caption, coin_caption
+from generators.market_hours import basis_caption, coin_caption, is_weekend
 
 
-def _basis(market: str, rows: list[dict]) -> str:
+def _basis(market: str, rows: list[dict], weekly: bool = False) -> str:
     """장면 하단 등락률 기준 문구. rows에서 거래일 날짜를 읽어 생성."""
     if not rows:
         return ""
-    prev = rows[0].get("prev_date", "")
     last = rows[0].get("last_date", "")
+    if weekly:
+        week = rows[0].get("week_date", "")
+        if week and last:
+            from generators.market_hours import _md
+            return f"기준: {_md(week)} 종가 → {_md(last)} 종가 (주간)"
+        return "기준: 주간 등락률 (5거래일)"
+    prev = rows[0].get("prev_date", "")
     return basis_caption(market, prev, last)
 
 W, H = 1080, 1920
@@ -59,54 +65,73 @@ def _ret_color(v) -> tuple:
 # ── 장면 정의 ────────────────────────────────────────────────
 
 def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
-    """장면 구성: hook → 국내(movers) → 미국(us_movers) → 코인(coins) → news → watch."""
+    """장면 구성: hook → 국내(movers) → 미국(us_movers) → 코인(coins) → news → watch.
+    주말(토·일)엔 '주간 결산' 모드: 주간 수익률(ret_7d) 기준 + 마무리 톤."""
     stocks, coins, news = snapshot["stocks"], snapshot["coins"], snapshot["news"]
     date = snapshot["date"]
+    weekend = is_weekend()
+    metric = "ret_7d" if weekend else "ret_1d"
     sector, sec_names = dominant_sector(stocks)
     coin_movers = top_movers(coins, "ret_1d", 2)
     top_news = key_news(news, 2, sector)
     narr = narrations or {}
 
-    hook = (f"오늘 시장, 그냥 오른 게 아닙니다. 돈이 {sector} 쪽으로 다시 몰렸습니다."
-            if sector else "오늘 시장에서 돈이 어디로 움직였는지 1분으로 정리합니다.")
-    scenes = [{
-        "key": "hook",
-        "title": "오늘의 시장 브리핑",
-        "subtitle": f"{date} · 돈은 어디로?",
-        "items": [],
-        "narration": narr.get("hook") or hook,
-    }]
+    if weekend:
+        hook = (f"이번 주 시장, 돈은 {sector} 쪽으로 움직였습니다. 한 주 정리하고 다음 주를 준비해봅니다."
+                if sector else "이번 주 시장에서 돈이 어디로 움직였는지, 한 주를 정리해봅니다.")
+        scenes = [{
+            "key": "hook",
+            "title": "주간 시장 결산",
+            "subtitle": f"{date} · 이번 주 돈의 흐름",
+            "items": [],
+            "narration": narr.get("hook") or hook,
+        }]
+    else:
+        hook = (f"오늘 시장, 그냥 오른 게 아닙니다. 돈이 {sector} 쪽으로 다시 몰렸습니다."
+                if sector else "오늘 시장에서 돈이 어디로 움직였는지 1분으로 정리합니다.")
+        scenes = [{
+            "key": "hook",
+            "title": "오늘의 시장 브리핑",
+            "subtitle": f"{date} · 돈은 어디로?",
+            "items": [],
+            "narration": narr.get("hook") or hook,
+        }]
 
     # 주식을 국내(KRW)·미국(USD)으로 나눠 각각 TOP 10 화면을 만든다
     kr_stocks = [s for s in stocks if s.get("currency") == "KRW"]
     us_stocks = [s for s in stocks if s.get("currency") == "USD"]
+    sub_label = "이번 주 등락률 TOP 10" if weekend else "1일 등락률 TOP 10"
 
-    kr_top = top_movers(kr_stocks, "ret_1d", 10)
+    kr_top = top_movers(kr_stocks, metric, 10)
     if kr_top:
-        quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s['ret_1d'])}"
-                          for s in top_movers(kr_stocks, "ret_1d", 3))
+        quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s[metric])}"
+                          for s in top_movers(kr_stocks, metric, 3))
+        kr_narr = (f"이번 주 국내 증시 마무리는 이랬습니다. {quick}." if weekend
+                   else f"국내 증시부터 빠르게. {quick}.")
         scenes.append({
             "key": "movers",  # 국내 (키 유지 — AI 내레이션 movers 필드 = 국내)
-            "title": "국내 증시",
-            "subtitle": "국내 주식 1일 등락률 TOP 10",
-            "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
+            "title": "국내 증시 주간 결산" if weekend else "국내 증시",
+            "subtitle": f"국내 주식 {sub_label}",
+            "items": [(f"{i}. {s['name']}", _fmt_pct(s[metric]), s[metric])
                       for i, s in enumerate(kr_top, 1)],
-            "caption": _basis("KR", kr_top),
-            "narration": narr.get("movers") or f"국내 증시부터 빠르게. {quick}.",
+            "caption": _basis("KR", kr_top, weekly=weekend),
+            "narration": narr.get("movers") or kr_narr,
         })
 
-    us_top = top_movers(us_stocks, "ret_1d", 10)
+    us_top = top_movers(us_stocks, metric, 10)
     if us_top:
-        us_quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s['ret_1d'])}"
-                             for s in top_movers(us_stocks, "ret_1d", 3))
+        us_quick = ", ".join(f"{spoken_name(s['name'])} {spoken_pct(s[metric])}"
+                             for s in top_movers(us_stocks, metric, 3))
+        us_narr = (f"미국 증시는 한 주간 {us_quick}." if weekend
+                   else f"미국 증시에서는 {us_quick}.")
         scenes.append({
             "key": "us_movers",
-            "title": "미국 증시",
-            "subtitle": "미국 주식 1일 등락률 TOP 10",
-            "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
+            "title": "미국 증시 주간 결산" if weekend else "미국 증시",
+            "subtitle": f"미국 주식 {sub_label}",
+            "items": [(f"{i}. {s['name']}", _fmt_pct(s[metric]), s[metric])
                       for i, s in enumerate(us_top, 1)],
-            "caption": _basis("US", us_top),
-            "narration": narr.get("us_movers") or f"미국 증시에서는 {us_quick}.",
+            "caption": _basis("US", us_top, weekly=weekend),
+            "narration": narr.get("us_movers") or us_narr,
         })
 
     # 코인 장면: 화면에 코인 TOP 10, 내레이션은 상위 1~2개만
@@ -132,33 +157,54 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
             ko_news = [x for x in key_news(news, 6, sector) if _has_hangul(x["title"])][:2]
         news_lines = [f"{'첫' if i == 1 else '두'} 번째. {x['title']}."
                       for i, x in enumerate(ko_news, 1)]
-        why = (f" 이 흐름은 {sector} 밸류체인과 직접 연결될 수 있습니다."
-               if sector else " 이 뉴스들이 어느 섹터로 돈을 움직이는지가 핵심입니다.")
-        template_news = (("이제 중요한 뉴스입니다. " + " ".join(news_lines) + why)
+        if weekend:
+            why = (f" 다음 주에도 {sector} 흐름이 이어지는지가 관전 포인트입니다."
+                   if sector else " 이 이슈들이 다음 주 어느 섹터로 돈을 움직일지가 관전 포인트입니다.")
+            intro = "이번 주 핵심 이슈를 정리하면. "
+        else:
+            why = (f" 이 흐름은 {sector} 밸류체인과 직접 연결될 수 있습니다."
+                   if sector else " 이 뉴스들이 어느 섹터로 돈을 움직이는지가 핵심입니다.")
+            intro = "이제 중요한 뉴스입니다. "
+        template_news = ((intro + " ".join(news_lines) + why)
                          if news_lines else
-                         (f"오늘 뉴스 흐름의 핵심은 {sector or '주도 섹터'}로 돈이 이어지는지 여부입니다."
+                         (f"이번 주 뉴스 흐름의 핵심은 {sector or '주도 섹터'}로 돈이 이어지는지 여부입니다."
                           " 관련 소식이 이어지는지 지켜봐야 합니다."))
         scenes.append({
             "key": "news",
-            "title": "주목할 뉴스",
-            "subtitle": "돈의 흐름과 연결되는 소식",
+            "title": "이번 주 핵심 이슈" if weekend else "주목할 뉴스",
+            "subtitle": "다음 주 돈의 흐름과 연결되는 소식" if weekend else "돈의 흐름과 연결되는 소식",
             "items": [],  # 뉴스 원문 제목은 화면에 안 띄운다 (자막+내레이션으로 충분)
             "narration": narr.get("news") or template_news,
         })
 
-    if sector and sec_names:
-        watch = (f"오늘 기준 관심 구간은 {sector}. {', '.join(sec_names)} 중심으로 "
-                 f"거래량과 뉴스 지속성 확인이 필요합니다.")
+    if weekend:
+        if sector and sec_names:
+            watch = (f"다음 주 관심 구간은 {sector}. {', '.join(sec_names)} 중심으로 "
+                     f"월요일 개장 후 거래량과 뉴스 지속성 확인이 필요합니다.")
+        else:
+            watch = "이번 주 강했던 종목들이 다음 주에도 이어지는지, 월요일 개장 흐름 확인이 필요합니다."
+        scenes.append({
+            "key": "watch",
+            "title": "다음 주 관전 포인트",
+            "subtitle": sector or "다음 주 돈의 흐름",
+            "items": [],
+            "narration": narr.get("watch") or (watch + " 단, 예측은 참고만 하시고 "
+                                                       "실제 흐름은 거래량과 뉴스로 확인하세요."),
+        })
     else:
-        watch = "오늘 급등 종목들의 거래량이 내일도 이어지는지 확인이 필요합니다."
-    scenes.append({
-        "key": "watch",
-        "title": "관찰 포인트",
-        "subtitle": sector or "돈의 흐름 확인",
-        "items": [],
-        "narration": narr.get("watch") or (watch + " 단, 단기 급등주는 변동성이 큽니다. "
-                                                   "추격매수보다 뉴스 지속성과 거래량을 같이 보세요."),
-    })
+        if sector and sec_names:
+            watch = (f"오늘 기준 관심 구간은 {sector}. {', '.join(sec_names)} 중심으로 "
+                     f"거래량과 뉴스 지속성 확인이 필요합니다.")
+        else:
+            watch = "오늘 급등 종목들의 거래량이 내일도 이어지는지 확인이 필요합니다."
+        scenes.append({
+            "key": "watch",
+            "title": "관찰 포인트",
+            "subtitle": sector or "돈의 흐름 확인",
+            "items": [],
+            "narration": narr.get("watch") or (watch + " 단, 단기 급등주는 변동성이 큽니다. "
+                                                       "추격매수보다 뉴스 지속성과 거래량을 같이 보세요."),
+        })
     return scenes
 
 

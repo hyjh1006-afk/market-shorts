@@ -69,9 +69,22 @@ def generate_video_narrations(snapshot: dict) -> dict:
     반환: {"hook": str, "movers": str, "coins": str, "news": str, "watch": str,
            "images": {"hook": str, "movers": str, "coins": str, "news": str, "watch": str}}
     """
-    prompt = f"""너는 투자 콘텐츠 작가야. 시청자는 항상 "그래서 돈이 어디로 가고 있는데?"라고 묻고 있다.
-아래 오늘({snapshot['date']}) 시장 데이터로 YouTube Shorts 영상의 장면별 내레이션을 작성해줘.
+    from generators.market_hours import is_weekend
+    weekend = is_weekend()
+    weekend_block = """
+【주말 모드 — 주간 결산 톤 (중요!)】
+오늘은 주말이라 장이 닫혀 있다. 하루 브리핑이 아니라 '한 주 마무리 + 다음 주 준비' 영상이다:
+- hook: "이번 주 시장, 돈은 ○○로 움직였습니다" 같은 주간 결산 후킹.
+- movers/us_movers: 데이터 블록의 '주간 등락률'을 쓰고 "이번 주 국내 증시는", "미국 증시는 한 주간" 톤으로.
+  "오늘"이라는 단어 금지 — 이번 주/한 주간으로 말할 것.
+- news: 이번 주 핵심 이슈 1~2개 정리 + 다음 주에 이 흐름이 어디로 이어질지 관전 포인트.
+  단정 예측 금지 — "~할지 지켜봐야", "~가 관전 포인트" 같은 관찰 화법으로.
+- watch: 다음 주 관찰할 섹터/종목/일정. "월요일 개장 후" 관점.
+""" if weekend else ""
 
+    prompt = f"""너는 투자 콘텐츠 작가야. 시청자는 항상 "그래서 돈이 어디로 가고 있는데?"라고 묻고 있다.
+아래 {'이번 주' if weekend else '오늘'}({snapshot['date']}) 시장 데이터로 YouTube Shorts 영상의 장면별 내레이션을 작성해줘.
+{weekend_block}
 {build_data_block(snapshot)}
 
 아래 JSON 형식으로만 답해. 다른 텍스트, 마크다운, 설명을 붙이지 마:

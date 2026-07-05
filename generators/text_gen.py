@@ -107,12 +107,15 @@ def build_data_block(snapshot: dict) -> str:
     stocks, coins, news = snapshot["stocks"], snapshot["coins"], snapshot["news"]
     sector, sec_names = dominant_sector(stocks)
 
+    from generators.market_hours import is_weekend
+    metric = "ret_7d" if is_weekend() else "ret_1d"
+    label = "주간" if is_weekend() else "1일"
     kr = [s for s in stocks if s.get("currency") == "KRW"]
     us = [s for s in stocks if s.get("currency") == "USD"]
-    lines = ["[국내 주식 - 1일 등락률 상위]"]
-    lines += [_stock_line(s) for s in top_movers(kr, "ret_1d", 5)] or ["없음"]
-    lines.append("\n[미국 주식 - 1일 등락률 상위]")
-    lines += [_stock_line(s) for s in top_movers(us, "ret_1d", 5)] or ["없음"]
+    lines = [f"[국내 주식 - {label} 등락률 상위]"]
+    lines += [_stock_line(s) for s in top_movers(kr, metric, 5)] or ["없음"]
+    lines.append(f"\n[미국 주식 - {label} 등락률 상위]")
+    lines += [_stock_line(s) for s in top_movers(us, metric, 5)] or ["없음"]
     lines.append("\n[거래량 급증 (20일 평균 대비)]")
     lines += [f"{s['name']}: {s['vol_ratio']}배" for s in volume_spikes(stocks)[:5]] or ["없음"]
     lines.append("\n[코인 - 24h 상승률 상위]")

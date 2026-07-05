@@ -41,6 +41,7 @@ def collect_stocks(watchlist: dict[str, str] | None = None) -> list[dict]:
         # 등락률 기준이 되는 두 거래일 날짜 (마지막 봉 = 장중이면 현재가, 마감이면 종가)
         last_date = df.index[-1].strftime("%Y-%m-%d")
         prev_date = df.index[-2].strftime("%Y-%m-%d")
+        week_date = df.index[-6].strftime("%Y-%m-%d")  # 주간(5거래일) 수익률 기준 시작일
         rows.append({
             "ticker": ticker,
             "name": watchlist[ticker],
@@ -53,6 +54,7 @@ def collect_stocks(watchlist: dict[str, str] | None = None) -> list[dict]:
             "currency": "KRW" if ticker.endswith((".KS", ".KQ")) else "USD",
             "last_date": last_date,
             "prev_date": prev_date,
+            "week_date": week_date,
         })
     return rows
 

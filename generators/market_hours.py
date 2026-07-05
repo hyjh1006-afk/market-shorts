@@ -27,6 +27,12 @@ def _in_session(local: datetime, start_min: int, end_min: int) -> bool:
     return start_min <= t < end_min
 
 
+def is_weekend(now: datetime | None = None) -> bool:
+    """토·일(KST) 여부 — 주말엔 영상이 '주간 결산' 모드로 전환된다."""
+    now = (now or now_kst()).astimezone(KST)
+    return now.weekday() >= 5
+
+
 def is_kr_regular_open(now: datetime | None = None) -> bool:
     now = now or now_kst()
     return _in_session(now.astimezone(KST), 9 * 60, 15 * 60 + 30)
