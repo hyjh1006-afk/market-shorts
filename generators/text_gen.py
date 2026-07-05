@@ -98,8 +98,12 @@ def build_data_block(snapshot: dict) -> str:
     stocks, coins, news = snapshot["stocks"], snapshot["coins"], snapshot["news"]
     sector, sec_names = dominant_sector(stocks)
 
-    lines = ["[주식 - 1일 수익률 상위]"]
-    lines += [_stock_line(s) for s in top_movers(stocks, "ret_1d", 5)]
+    kr = [s for s in stocks if s.get("currency") == "KRW"]
+    us = [s for s in stocks if s.get("currency") == "USD"]
+    lines = ["[국내 주식 - 1일 등락률 상위]"]
+    lines += [_stock_line(s) for s in top_movers(kr, "ret_1d", 5)] or ["없음"]
+    lines.append("\n[미국 주식 - 1일 등락률 상위]")
+    lines += [_stock_line(s) for s in top_movers(us, "ret_1d", 5)] or ["없음"]
     lines.append("\n[거래량 급증 (20일 평균 대비)]")
     lines += [f"{s['name']}: {s['vol_ratio']}배" for s in volume_spikes(stocks)[:5]] or ["없음"]
     lines.append("\n[코인 - 24h 상승률 상위]")
@@ -126,10 +130,17 @@ def generate_shorts_script(snapshot: dict) -> str:
 
     parts = [f"[Shorts 대본] {date} 시장 브리핑", "", "(0~3초 · 후킹)", hook, ""]
 
-    parts.append("(3~10초 · 급등 요약 — 빠르게 치고 지나가기)")
-    quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}" for s in movers)
+    parts.append("(3~13초 · 국내/미국 급등 요약 — 빠르게 치고 지나가기)")
+    kr = [s for s in stocks if s.get("currency") == "KRW"]
+    us = [s for s in stocks if s.get("currency") == "USD"]
+    kr_quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+                         for s in top_movers(kr, "ret_1d", 3))
+    us_quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+                         for s in top_movers(us, "ret_1d", 3))
     coin_quick = "와 ".join(c["symbol"] for c in coin_movers)
-    parts.append(f"{quick}. 코인에서는 {coin_quick}가 강했습니다.")
+    parts.append(f"국내 증시에서는 {kr_quick}.")
+    parts.append(f"미국 증시에서는 {us_quick}.")
+    parts.append(f"코인에서는 {coin_quick}가 강했습니다.")
     parts.append("")
 
     parts.append("(10~40초 · 핵심 뉴스 — 왜 중요한지 설명)")

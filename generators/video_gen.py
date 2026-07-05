@@ -49,11 +49,10 @@ def _ret_color(v) -> tuple:
 # ── 장면 정의 ────────────────────────────────────────────────
 
 def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
-    """장면 4개(key: hook/movers/news/watch)를 만든다."""
+    """장면 구성: hook → 국내(movers) → 미국(us_movers) → 코인(coins) → news → watch."""
     stocks, coins, news = snapshot["stocks"], snapshot["coins"], snapshot["news"]
     date = snapshot["date"]
     sector, sec_names = dominant_sector(stocks)
-    movers = top_movers(stocks, "ret_1d", 3)
     coin_movers = top_movers(coins, "ret_1d", 2)
     top_news = key_news(news, 2, sector)
     narr = narrations or {}
@@ -68,17 +67,34 @@ def build_scenes(snapshot: dict, narrations: dict | None = None) -> list[dict]:
         "narration": narr.get("hook") or hook,
     }]
 
-    if movers:
-        quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}" for s in movers)
-        # 화면에는 주식 TOP 10, 내레이션은 상위 3개만 읽는다
-        screen_movers = top_movers(stocks, "ret_1d", 10)
+    # 주식을 국내(KRW)·미국(USD)으로 나눠 각각 TOP 10 화면을 만든다
+    kr_stocks = [s for s in stocks if s.get("currency") == "KRW"]
+    us_stocks = [s for s in stocks if s.get("currency") == "USD"]
+
+    kr_top = top_movers(kr_stocks, "ret_1d", 10)
+    if kr_top:
+        quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+                          for s in top_movers(kr_stocks, "ret_1d", 3))
         scenes.append({
-            "key": "movers",
-            "title": f"{sector or '오늘'} 강세" if sector else "오늘 급등",
-            "subtitle": "1일 수익률 TOP 10",
+            "key": "movers",  # 국내 (키 유지 — AI 내레이션 movers 필드 = 국내)
+            "title": "국내 증시",
+            "subtitle": "국내 주식 1일 등락률 TOP 10",
             "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
-                      for i, s in enumerate(screen_movers, 1)],
-            "narration": narr.get("movers") or f"급등부터 빠르게. {quick}.",
+                      for i, s in enumerate(kr_top, 1)],
+            "narration": narr.get("movers") or f"국내 증시부터 빠르게. {quick}.",
+        })
+
+    us_top = top_movers(us_stocks, "ret_1d", 10)
+    if us_top:
+        us_quick = ", ".join(f"{s['name']} {spoken_pct(s['ret_1d'])}"
+                             for s in top_movers(us_stocks, "ret_1d", 3))
+        scenes.append({
+            "key": "us_movers",
+            "title": "미국 증시",
+            "subtitle": "미국 주식 1일 등락률 TOP 10",
+            "items": [(f"{i}. {s['name']}", _fmt_pct(s["ret_1d"]), s["ret_1d"])
+                      for i, s in enumerate(us_top, 1)],
+            "narration": narr.get("us_movers") or f"미국 증시에서는 {us_quick}.",
         })
 
     # 코인 장면: 화면에 코인 TOP 10, 내레이션은 상위 1~2개만
@@ -173,7 +189,8 @@ def default_image_prompts(sector: str | None, news_titles: list[str]) -> dict:
         news_base = "financial news concept, world map with market data overlays"
     return {
         "hook": f"global financial market money flow concept, glowing light streams over a dark city skyline, {_STYLE}",
-        "movers": f"rising stock market rally, upward glowing green candlestick chart on a trading screen, {_STYLE}",
+        "movers": f"rising Korean stock market rally, upward glowing green candlestick chart on a trading screen, {_STYLE}",
+        "us_movers": f"Wall Street and New York stock exchange at night, glowing ticker board, upward chart, {_STYLE}",
         "coins": f"golden cryptocurrency coins glowing above a digital trading chart, {_STYLE}",
         "news": f"{news_base}, {_STYLE}",
         "watch": f"trader watching multiple glowing market monitors in a dark room, seen from behind, {_STYLE}",
