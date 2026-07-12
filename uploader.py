@@ -65,8 +65,11 @@ def _get_credentials():
     if TOKEN.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN), SCOPES)
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        TOKEN.write_text(creds.to_json(), encoding="utf-8")
+        try:
+            creds.refresh(Request())
+            TOKEN.write_text(creds.to_json(), encoding="utf-8")
+        except Exception:
+            creds = None   # 토큰 만료/폐기 → 새 로그인으로 진행
     if not creds or not creds.valid:
         flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRET), SCOPES)
         creds = flow.run_local_server(port=0)   # 브라우저 열려서 1회 로그인
