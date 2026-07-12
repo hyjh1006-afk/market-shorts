@@ -44,8 +44,11 @@ jobs:
           now = datetime.datetime.now(KST)
           slot_now = f"{now.hour:02d}:{now.minute:02d}"
           times = sorted(json.load(open("schedule.json")).get("times", [])[:6])
-          # 오늘 지금까지 지나간(예정) 업로드 시각 수
-          due = sum(1 for t in times if t <= slot_now)
+          # 따라잡기 범위: 최근 3시간 안에 지나간 슬롯만 (그보다 오래된 미스는 버림 — 사용자 방침)
+          WINDOW_H = 3
+          window_start = now - datetime.timedelta(hours=WINDOW_H)
+          ws = f"{window_start.hour:02d}:{window_start.minute:02d}" if window_start.date() == now.date() else "00:00"
+          due = sum(1 for t in times if ws <= t <= slot_now)
 
           def today_uploads():
               """유튜브 API로 '오늘(KST) 실제 업로드된 영상 수'를 센다 (중복 방지)."""
@@ -62,14 +65,12 @@ jobs:
               ch = api("https://www.googleapis.com/youtube/v3/channels?part=contentDetails&mine=true")
               up = ch["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
               pl = api(f"https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId={up}&maxResults=25")
-              today = now.date().isoformat()
-              first_slot = times[0] if times else "00:00"
               cnt = 0
               for it in pl.get("items", []):
                   pub = it["snippet"]["publishedAt"].replace("Z", "+00:00")
                   p = datetime.datetime.fromisoformat(pub).astimezone(KST)
-                  # 오늘 첫 슬롯 이전에 올라간 영상은 전날 막차 따라잡기분 → 오늘 집계에서 제외
-                  if p.date().isoformat() == today and f"{p.hour:02d}:{p.minute:02d}" >= first_slot:
+                  # 따라잡기 범위(최근 3시간)와 같은 창으로 집계
+                  if p >= window_start:
                       cnt += 1
               return cnt
 
