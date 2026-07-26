@@ -1,0 +1,28 @@
+{
+  "_설명": "유튜브 업로드 제목 훅 패턴 (ai_monetization_lab 실험 E7). enabled를 false로 바꾸거나 이 파일을 지우면 기존 날짜형 제목으로 돌아간다. 자리표시자: {name}=종목명, {ret}=등락률, {ratio}=거래량배율",
+  "enabled": true,
+  "min_abs_move_pct": 3.0,
+  "min_vol_ratio": 2.0,
+  "suffix": " #shorts",
+  "templates": {
+    "big_gainer": [
+      "{name} {ret}% 급등, 오늘 무슨 일이",
+      "{name} {ret}% — 산 사람만 웃었다",
+      "오늘 시장이 주목한 {name}, {ret}%"
+    ],
+    "big_loser": [
+      "{name} {ret}%, 흔들린 이유",
+      "{name} {ret}% — 지금 확인할 것",
+      "오늘 {name}에 무슨 일이 있었나"
+    ],
+    "volume_spike": [
+      "거래량 {ratio}배 터진 {name}",
+      "{name}, 오늘 거래량이 심상치 않다",
+      "{name}에 돈이 몰렸다 — 거래량 {ratio}배"
+    ],
+    "coin_mover": [
+      "코인 시장 오늘의 승자, {name} {ret}%",
+      "{name} {ret}% — 코인 상위 20개 중 1등"
+    ]
+  }
+}

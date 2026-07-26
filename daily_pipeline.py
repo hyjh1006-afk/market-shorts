@@ -94,7 +94,15 @@ def main() -> int:
         elif not TOKEN.exists():
             log("  건너뜀: 최초 인증 필요 — PC에서 'python uploader.py' 1회 실행")
         else:
-            vid = upload_video(video_path)
+            hook_title = None
+            try:  # 훅 제목 (title_hooks.json) — 실패하면 기존 날짜형 제목 사용
+                from title_hooks import build_hook_title
+                hook_title = build_hook_title(db.load_snapshot())
+                if hook_title:
+                    log(f"  훅 제목 적용: {hook_title}")
+            except Exception as e:
+                log(f"  훅 제목 생성 실패(기본 제목 사용): {e}")
+            vid = upload_video(video_path, title=hook_title)
             log(f"  업로드 완료: https://youtube.com/shorts/{vid}")
     except Exception as e:
         log(f"  업로드 실패: {e}")
