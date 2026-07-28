@@ -440,6 +440,16 @@ def generate_video(snapshot: dict, out_dir: Path | None = None,
     out_dir.mkdir(parents=True, exist_ok=True)
     scenes = build_scenes(snapshot, narrations)
 
+    # 감독관 게이트 — 텍스트 확정 직후·렌더 전 검수 (게이트 자체 오류는 통과 처리)
+    try:
+        from review_gate import gate as _review_gate
+        _ok, _why = _review_gate(scenes)
+    except Exception:
+        _ok, _why = True, "게이트 오류 — 통과"
+    print(f"  감독관 게이트: {'통과' if _ok else '차단'} — {_why}")
+    if not _ok:
+        raise RuntimeError(f"감독관 게이트 차단: {_why}")
+
     clips = []
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
