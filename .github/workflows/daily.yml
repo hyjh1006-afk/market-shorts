@@ -43,7 +43,10 @@ jobs:
           KST = datetime.timezone(datetime.timedelta(hours=9))
           now = datetime.datetime.now(KST)
           slot_now = f"{now.hour:02d}:{now.minute:02d}"
-          times = sorted(json.load(open("schedule.json")).get("times", [])[:6])
+          cfg = json.load(open("schedule.json"))
+          # 평일/주말 분리 시간표 (weekday_times/weekend_times). 옛 형식 "times"도 지원
+          key = "weekend_times" if now.weekday() >= 5 else "weekday_times"
+          times = sorted((cfg.get(key) or cfg.get("times") or [])[:6])
           # 따라잡기 범위: 최근 3시간 안에 지나간 슬롯만 (그보다 오래된 미스는 버림 — 사용자 방침)
           WINDOW_H = 3
           window_start = now - datetime.timedelta(hours=WINDOW_H)

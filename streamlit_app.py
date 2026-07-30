@@ -91,16 +91,22 @@ st.divider()
 st.subheader("⚙️ 자동 업로드 시간표")
 
 
-def _load_schedule() -> list[str]:
+def _load_schedule() -> dict:
+    """{"weekday_times": [...], "weekend_times": [...]} (옛 형식 "times"도 변환)."""
     try:
         r = _rq.get(f"https://api.github.com/repos/{REPO}/contents/schedule.json",
                     headers={"Accept": "application/vnd.github.raw+json"}, timeout=10)
-        return json.loads(r.text).get("times", ["07:30"])
+        cfg = json.loads(r.text)
+        legacy = cfg.get("times")
+        return {
+            "weekday_times": cfg.get("weekday_times") or legacy or ["22:30"],
+            "weekend_times": cfg.get("weekend_times") or legacy or ["08:00"],
+        }
     except Exception:
-        return ["07:30"]
+        return {"weekday_times": ["22:30"], "weekend_times": ["08:00"]}
 
 
-def _save_schedule(times: list[str], token: str) -> str | None:
+def _save_schedule(weekday: list[str], weekend: list[str], token: str) -> str | None:
     """GitHub의 schedule.json을 갱신한다. 실패 시 에러 문자열 반환."""
     api = f"https://api.github.com/repos/{REPO}/contents/schedule.json"
     headers = {"Authorization": f"Bearer {token}",
@@ -108,9 +114,10 @@ def _save_schedule(times: list[str], token: str) -> str | None:
     meta = _rq.get(api, headers=headers, timeout=10)
     if not meta.ok:
         return f"파일 정보를 못 읽었어요 (HTTP {meta.status_code}) — 토큰 권한 확인"
-    body = json.dumps({"times": times}, ensure_ascii=False, indent=2) + "\n"
+    body = json.dumps({"weekday_times": weekday, "weekend_times": weekend},
+                      ensure_ascii=False, indent=2) + "\n"
     resp = _rq.put(api, headers=headers, timeout=15, json={
-        "message": f"업로드 시간표 변경: {', '.join(times)}",
+        "message": f"업로드 시간표 변경: 평일 {', '.join(weekday)} / 주말 {', '.join(weekend)}",
         "content": base64.b64encode(body.encode()).decode(),
         "sha": meta.json()["sha"],
     })
@@ -118,11 +125,14 @@ def _save_schedule(times: list[str], token: str) -> str | None:
 
 
 current = _load_schedule()
-st.caption(f"현재 시간표: **{', '.join(current)}** (한국시간 · 매일 반복)")
+st.caption(f"현재: 평일 **{', '.join(current['weekday_times'])}** · "
+           f"주말 **{', '.join(current['weekend_times'])}** (한국시간 · 매주 반복)")
 
 _options = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)]
-_sel = st.multiselect("업로드 시각 선택 — 30분 단위, 하루 최대 6개 (유튜브 무료 한도)",
-                      _options, default=[t for t in current if t in _options])
+_wd = st.multiselect("평일(월~금) 업로드 시각 — 30분 단위",
+                     _options, default=[t for t in current["weekday_times"] if t in _options])
+_we = st.multiselect("주말(토·일) 업로드 시각 — 30분 단위",
+                     _options, default=[t for t in current["weekend_times"] if t in _options])
 
 try:
     _gh_token = str(st.secrets.get("GITHUB_TOKEN", "")).strip()
@@ -130,17 +140,17 @@ except Exception:
     _gh_token = ""
 
 if st.button("💾 시간표 저장", use_container_width=True):
-    if not (1 <= len(_sel) <= 6):
-        st.error("1개 이상 6개 이하로 선택하세요. (유튜브 무료 업로드 한도가 하루 6개예요)")
+    if not (1 <= len(_wd) <= 6) or not (1 <= len(_we) <= 6):
+        st.error("평일·주말 각각 1개 이상 6개 이하로 선택하세요. (유튜브 무료 업로드 한도가 하루 6개예요)")
     elif not _gh_token:
         st.warning("앱에서 바로 저장하려면 Streamlit secrets에 GITHUB_TOKEN이 필요해요. "
-                   f"지금은 [GitHub에서 직접 수정]({SCHEDULE_EDIT_URL})해 주세요 — "
-                   '숫자만 바꾸면 됩니다. 예: {"times": ["07:30", "19:00"]}')
+                   f"지금은 [GitHub에서 직접 수정]({SCHEDULE_EDIT_URL})해 주세요 — 예: "
+                   '{"weekday_times": ["22:30"], "weekend_times": ["08:00"]}')
     else:
-        err = _save_schedule(sorted(_sel), _gh_token)
+        err = _save_schedule(sorted(_wd), sorted(_we), _gh_token)
         if err:
             st.error(err)
         else:
-            st.success(f"저장 완료! 다음 시각부터 적용: {', '.join(sorted(_sel))}")
+            st.success(f"저장 완료! 평일 {', '.join(sorted(_wd))} · 주말 {', '.join(sorted(_we))}")
 
 st.caption(f"수동 수정: [GitHub에서 schedule.json 열기]({SCHEDULE_EDIT_URL})")
