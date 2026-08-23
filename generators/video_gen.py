@@ -4,7 +4,7 @@
 구성: 후킹 → 급등 요약 → 핵심 뉴스 → 관찰 포인트+리스크
 - 내레이션: AI(Gemini) 작성, 실패 시 템플릿
 - 배경: 장면마다 Gemini AI 생성 이미지 (실패 시 단색 배경)
-- 자막: 문장 단위로 음성과 동기화되어 하단에 표시
+- 자막: 문장 단위로 음성과 동기화. 폰 Shorts UI를 피해 하단 안전 영역에 표시
 - 음성: edge-tts (config의 TTS_VOICE/TTS_RATE)
 출력: output/shorts_YYYY-MM-DD_HHMMSS.mp4 (1080x1920)
 """
@@ -39,6 +39,16 @@ def _basis(market: str, rows: list[dict], weekly: bool = False) -> str:
     return basis_caption(market, prev, last)
 
 W, H = 1080, 1920
+
+# ── 폰(YouTube Shorts) UI 안전 영역 ──────────────────────────
+# 폰에서 재생하면 영상 위를 앱 UI가 덮는다. 실제 화면 캡처로 잰 경계(1080x1920 환산):
+#   하단 — 채널명·영상제목·"동영상 공유" 블록이 y≈1545부터
+#   우측 — 좋아요·댓글·공유·리믹스 버튼 열이 x≈890부터
+# 자막과 항목 리스트는 이 경계 안쪽에서만 그린다.
+SAFE_BOTTOM = 1480      # 자막 밴드 하단 한계
+SAFE_RIGHT = 860        # 자막 밴드 우측 한계 (버튼 열 회피)
+CONTENT_BOTTOM = 1090   # 항목(TOP N) 리스트가 끝나야 하는 y
+TITLE_MAX_W = 660       # 상단 바(뒤로·검색·⋮) 사이로 들어가는 제목 폭
 
 # 색상 팔레트
 BG = (16, 21, 34)
@@ -265,8 +275,16 @@ def _fit_text(d, text, font, max_w):
 
 
 def _wrap_text(d, text, font, max_w):
-    """단어 단위 줄바꿈. 줄 목록 반환."""
-    words = text.split()
+    """단어 단위 줄바꿈. 줄 목록 반환. 한 단어가 한 줄보다 길면 글자 단위로 쪼갠다."""
+    words = []
+    for w_ in text.split():
+        while d.textlength(w_, font=font) > max_w and len(w_) > 1:
+            cut = len(w_) - 1
+            while cut > 1 and d.textlength(w_[:cut], font=font) > max_w:
+                cut -= 1
+            words.append(w_[:cut])
+            w_ = w_[cut:]
+        words.append(w_)
     lines, cur = [], ""
     for w_ in words:
         trial = (cur + " " + w_).strip()
@@ -309,12 +327,14 @@ def compose_base(scene: dict, bg_bytes: bytes | None) -> Image.Image:
     compact = n > 5   # 항목 많으면(TOP 10) 촘촘한 레이아웃
 
     f_title = _font(FONT_BOLD, 84 if compact else 92)
+    if compact:  # 제목이 상단 바 옆에 놓이므로 검색·⋮ 아이콘을 피하게 폭을 맞춘다
+        while f_title.size > 56 and d.textlength(scene["title"], font=f_title) > TITLE_MAX_W:
+            f_title = _font(FONT_BOLD, f_title.size - 4)
     f_sub = _font(FONT_REGULAR, 42 if compact else 46)
     f_item = _font(FONT_REGULAR, 36 if compact else 44)
     f_pct = _font(FONT_BOLD, 42 if compact else 54)
     row_h = 76 if compact else 106
     row_gap = 10 if compact else 30
-    pad_y = (row_h - (f_item.size + 8)) // 2
 
     title_y = (150 if compact else 300) if scene["items"] else 640
     tw = d.textlength(scene["title"], font=f_title)
@@ -336,7 +356,11 @@ def compose_base(scene: dict, bg_bytes: bytes | None) -> Image.Image:
     d.line([(W / 2 - 120, title_y + 190 + cap_h), (W / 2 + 120, title_y + 190 + cap_h)],
            fill=ACCENT, width=6)
 
-    y = title_y + (250 if compact else 290) + cap_h
+    y = title_y + (230 if compact else 290) + cap_h
+    if n:  # 폰 UI에 가리지 않도록 CONTENT_BOTTOM 안에 다 들어가게 행을 좁힌다
+        row_h = max(46, min(row_h + row_gap, (CONTENT_BOTTOM - y) // n) - row_gap)
+    pad_y = max(2, (row_h - (f_item.size + 8)) // 2)
+
     if scene["items"]:
         panel = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         pd = ImageDraw.Draw(panel)
@@ -361,31 +385,44 @@ def compose_base(scene: dict, bg_bytes: bytes | None) -> Image.Image:
 
 
 def add_subtitle(base: Image.Image, sentence: str) -> Image.Image:
-    """하단에 자막 밴드 + 문장을 얹는다. 긴 문장은 글자를 줄여 4줄까지."""
+    """자막 밴드 + 문장. 폰 Shorts UI(하단 설명·우측 버튼)를 피해 배치한다.
+
+    밴드 하단은 SAFE_BOTTOM, 우측은 SAFE_RIGHT에 맞추고,
+    문장이 길면 글자 크기를 단계적으로 줄여 가용 높이 안에 넣는다.
+    """
     img = base.convert("RGBA")
     d = ImageDraw.Draw(img)
-    f_sub = _font(FONT_BOLD, 60)   # 40~50대 시청자 가독성 위해 크게
-    lines = _wrap_text(d, sentence, f_sub, W - 160)
-    if len(lines) > 3:  # 3줄 초과면 폰트를 살짝 줄여 다시 감싼다 (최대 4줄)
-        f_sub = _font(FONT_BOLD, 52)
-        lines = _wrap_text(d, sentence, f_sub, W - 150)[:4]
 
-    line_h = round(f_sub.size * 1.42)
-    band_h = line_h * len(lines) + 60
-    band_top = H - 260 - band_h
+    left, right = 40, SAFE_RIGHT
+    pad_x, pad_y = 36, 28
+    max_w = right - left - pad_x * 2
+    max_h = SAFE_BOTTOM - CONTENT_BOTTOM
+
+    for size in (60, 54, 48, 44, 40):
+        f_sub = _font(FONT_BOLD, size)
+        lines = _wrap_text(d, sentence, f_sub, max_w)
+        line_h = round(size * 1.42)
+        band_h = line_h * len(lines) + pad_y * 2
+        if band_h <= max_h:
+            break
+    else:  # 최소 크기로도 넘치면 들어가는 줄까지만
+        lines = lines[:max(1, (max_h - pad_y * 2) // line_h)]
+        band_h = line_h * len(lines) + pad_y * 2
+
+    band_top = SAFE_BOTTOM - band_h
 
     overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    od.rounded_rectangle([(50, band_top), (W - 50, band_top + band_h)],
+    od.rounded_rectangle([(left, band_top), (right, band_top + band_h)],
                          radius=24, fill=(0, 0, 0, 175))
     img = Image.alpha_composite(img, overlay)
     d = ImageDraw.Draw(img)
 
-    ty = band_top + 30
+    ty = band_top + pad_y
     for line in lines:
         lw = d.textlength(line, font=f_sub)
-        d.text(((W - lw) / 2, ty), line, font=f_sub, fill=(255, 235, 130),
-               stroke_width=2, stroke_fill=(0, 0, 0))
+        d.text((left + (right - left - lw) / 2, ty), line, font=f_sub,
+               fill=(255, 235, 130), stroke_width=2, stroke_fill=(0, 0, 0))
         ty += line_h
     return img.convert("RGB")
 
